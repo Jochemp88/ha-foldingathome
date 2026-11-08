@@ -86,18 +86,29 @@ views:
           - type: heading
             heading: Work units
             icon: mdi:flask-outline
+          # One block per work unit: type, progress, project (links to the
+          # project page), expected finish as a clock time and PPD.
           - type: markdown
             content: |
               {% set units = state_attr('sensor.folding_pc_status', 'units') or [] %}
-              {% if units %}
-              | Project | Type | Progress | PPD | ETA |
-              |:--|:--|--:|--:|--:|
-              {% for u in units -%}
-              | {{ u.prcg }} | {{ u.type | upper }} | {{ u.progress }} % | {{ '{:,}'.format(u.ppd) }} | {{ u.eta }} |
+              {% set mult = {'d': 86400, 'h': 3600, 'm': 60, 's': 1} %}
+              {% for u in units %}
+              {% set ns = namespace(secs=0) %}
+              {% for n, unit in (u.eta or '') | regex_findall('(\d+(?:\.\d+)?)\s*([dhms])') %}
+              {% set ns.secs = ns.secs + n | float * mult[unit] %}
               {% endfor %}
+              {% set done = (now() + timedelta(seconds=ns.secs)) | as_local %}
+              {% set days = (done.date() - now().date()).days %}
+              {% set ppd = u.ppd or 0 %}
+              <ha-icon icon="{{ 'mdi:expansion-card' if u.type == 'gpu' else 'mdi:cpu-64-bit' }}"></ha-icon>&nbsp; **{{ u.type | upper }} · {{ u.progress | round(0) | int }} %**
+              <sub>[Project {{ u.project }}](https://stats.foldingathome.org/project/{{ u.project }})
+              {%- if not u.running %} · {{ 'paused' if u.state == 'RUN' else (u.state | lower) }}
+              {%- elif ns.secs > 0 %} · done {{ 'tomorrow ' if days == 1 else (done.strftime('%a ') if days > 1 else '') }}{{ done.strftime('%H:%M') }}{% endif %}
+              {%- if u.running and ppd > 0 %} · {{ '%.2fM' | format(ppd / 1000000) if ppd >= 1000000 else '%dk' | format(ppd // 1000) }} PPD{% endif %}</sub>
+
               {% else %}
-              No work units.
-              {% endif %}
+              No work units right now.
+              {% endfor %}
       - type: grid
         cards:
           - type: heading

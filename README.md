@@ -151,7 +151,8 @@ Statistics are refreshed every 30 minutes.
 
 [`examples/dashboard.yaml`](examples/dashboard.yaml) contains the dashboard
 from the screenshots: status, progress, PPD, expected finish, work unit timeout,
-the three buttons, a table of the running work units and the donor statistics.
+the three buttons, a compact list of the work units (type, progress, a link to
+the project, expected finish time and PPD per unit) and the donor statistics.
 Create a new dashboard, open ⋮ → **Edit dashboard** → ⋮ → **Raw configuration
 editor**, paste the file and replace `folding_pc` with the entity ID prefix of
 your machine.
