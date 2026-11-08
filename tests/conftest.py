@@ -15,6 +15,15 @@ if sys.platform == "win32":
 
 
 @pytest.fixture(autouse=True)
+def allow_local_sockets(socket_enabled):
+    """Allow sockets: the tests run a fake Folding@home client on 127.0.0.1.
+
+    The HA test plugin still only allows connections to 127.0.0.1.
+    """
+    return
+
+
+@pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Enable loading the integration from custom_components."""
     return
