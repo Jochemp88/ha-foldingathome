@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Folding@home client",
+        "description": "The client must accept connections from Home Assistant (http-addresses and allow in config.xml).",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the computer running Folding@home.",
+          "port": "Port of the client's web API, normally 7396."
+        }
+      },
+      "reconfigure": {
+        "title": "Change Folding@home client address",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the Folding@home client. Check the address, config.xml and the firewall.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This machine is already configured.",
+      "reconfigure_successful": "The address has been updated.",
+      "wrong_machine": "That address belongs to a different Folding@home machine."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "folding": "Folding",
+          "finishing": "Finishing",
+          "downloading": "Downloading",
+          "uploading": "Uploading",
+          "waiting": "Waiting",
+          "paused": "Paused",
+          "idle": "No work",
+          "offline": "Offline"
+        }
+      },
+      "progress": {
+        "name": "Progress"
+      },
+      "ppd": {
+        "name": "Points per day"
+      },
+      "eta": {
+        "name": "Expected finish"
+      },
+      "timeout": {
+        "name": "Work unit timeout"
+      },
+      "score": {
+        "name": "Total points",
+        "unit_of_measurement": "points"
+      },
+      "wus": {
+        "name": "Work units",
+        "unit_of_measurement": "WU"
+      },
+      "rank": {
+        "name": "Rank"
+      },
+      "team_rank": {
+        "name": "Team rank"
+      },
+      "last_wu": {
+        "name": "Last credited work unit"
+      }
+    },
+    "button": {
+      "fold": {
+        "name": "Fold"
+      },
+      "pause": {
+        "name": "Pause"
+      },
+      "finish": {
+        "name": "Finish"
+      }
+    }
+  },
+  "exceptions": {
+    "not_connected": {
+      "message": "The Folding@home client cannot be reached."
+    }
+  },
+  "device": {
+    "stats": {
+      "name": "Folding@home statistics"
+    }
+  }
+}

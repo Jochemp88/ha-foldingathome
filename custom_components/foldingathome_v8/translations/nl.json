@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Folding@home-client",
+        "description": "De client moet verbindingen van Home Assistant accepteren (http-addresses en allow in config.xml).",
+        "data": {
+          "host": "Host",
+          "port": "Poort"
+        },
+        "data_description": {
+          "host": "IP-adres of hostnaam van de computer waarop Folding@home draait.",
+          "port": "Poort van de web-API van de client, normaal 7396."
+        }
+      },
+      "reconfigure": {
+        "title": "Adres van de Folding@home-client wijzigen",
+        "data": {
+          "host": "Host",
+          "port": "Poort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met de Folding@home-client. Controleer het adres, config.xml en de firewall.",
+      "unknown": "Onverwachte fout"
+    },
+    "abort": {
+      "already_configured": "Deze machine is al ingesteld.",
+      "reconfigure_successful": "Het adres is bijgewerkt.",
+      "wrong_machine": "Dat adres hoort bij een andere Folding@home-machine."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "folding": "Folden",
+          "finishing": "Afronden",
+          "downloading": "Werk ophalen",
+          "uploading": "Resultaat versturen",
+          "waiting": "Wachten",
+          "paused": "Gepauzeerd",
+          "idle": "Geen werk",
+          "offline": "Uit"
+        }
+      },
+      "progress": {
+        "name": "Voortgang"
+      },
+      "ppd": {
+        "name": "Punten per dag"
+      },
+      "eta": {
+        "name": "Klaar verwacht"
+      },
+      "timeout": {
+        "name": "Time-out werkeenheid"
+      },
+      "score": {
+        "name": "Punten totaal",
+        "unit_of_measurement": "punten"
+      },
+      "wus": {
+        "name": "Werkeenheden",
+        "unit_of_measurement": "WU"
+      },
+      "rank": {
+        "name": "Ranglijst"
+      },
+      "team_rank": {
+        "name": "Teamranglijst"
+      },
+      "last_wu": {
+        "name": "Laatste werkeenheid"
+      }
+    },
+    "button": {
+      "fold": {
+        "name": "Folden"
+      },
+      "pause": {
+        "name": "Pauzeren"
+      },
+      "finish": {
+        "name": "Afronden"
+      }
+    }
+  },
+  "exceptions": {
+    "not_connected": {
+      "message": "De Folding@home-client is niet bereikbaar."
+    }
+  },
+  "device": {
+    "stats": {
+      "name": "Folding@home-statistieken"
+    }
+  }
+}

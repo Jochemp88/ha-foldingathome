@@ -1,0 +1,12 @@
+{
+  "domain": "foldingathome_v8",
+  "name": "Folding@home v8",
+  "codeowners": ["@Jochemp88"],
+  "config_flow": true,
+  "documentation": "https://github.com/Jochemp88/ha-foldingathome",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/Jochemp88/ha-foldingathome/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

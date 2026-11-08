@@ -1,0 +1,122 @@
+# Example dashboard for the Folding@home v8 integration.
+# Replace "folding_pc" with the entity ID prefix of your machine.
+# Paste into a new dashboard: ⋮ → Edit dashboard → ⋮ → Raw configuration editor.
+title: Folding@home
+views:
+  - title: Folding@home
+    path: folding
+    icon: mdi:dna
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Folding-PC
+            icon: mdi:desktop-tower
+          - type: tile
+            entity: sensor.folding_pc_status
+            name: Status
+            grid_options:
+              columns: 12
+          - type: gauge
+            entity: sensor.folding_pc_progress
+            name: Progress
+            min: 0
+            max: 100
+            grid_options:
+              columns: 6
+              rows: 2
+          - type: tile
+            entity: sensor.folding_pc_points_per_day
+            name: PPD
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.folding_pc_expected_finish
+            name: Expected finish
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.folding_pc_work_unit_timeout
+            name: Work unit timeout
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: button.folding_pc_fold
+            name: Fold
+            vertical: true
+            hide_state: true
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.folding_pc_fold
+            grid_options:
+              columns: 4
+              rows: 2
+          - type: tile
+            entity: button.folding_pc_pause
+            name: Pause
+            vertical: true
+            hide_state: true
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.folding_pc_pause
+            grid_options:
+              columns: 4
+              rows: 2
+          - type: tile
+            entity: button.folding_pc_finish
+            name: Finish
+            vertical: true
+            hide_state: true
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.folding_pc_finish
+            grid_options:
+              columns: 4
+              rows: 2
+      - type: grid
+        cards:
+          - type: heading
+            heading: Work units
+            icon: mdi:flask-outline
+          - type: markdown
+            content: |
+              {% set units = state_attr('sensor.folding_pc_status', 'units') or [] %}
+              {% if units %}
+              | Project | Type | Progress | PPD | ETA |
+              |:--|:--|--:|--:|--:|
+              {% for u in units -%}
+              | {{ u.prcg }} | {{ u.type | upper }} | {{ u.progress }} % | {{ '{:,}'.format(u.ppd) }} | {{ u.eta }} |
+              {% endfor %}
+              {% else %}
+              No work units.
+              {% endif %}
+      - type: grid
+        cards:
+          - type: heading
+            heading: Statistics
+            icon: mdi:chart-line
+          - type: tile
+            entity: sensor.folding_home_statistics_total_points
+            name: Total points
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: sensor.folding_home_statistics_work_units
+            name: Work units
+          - type: tile
+            entity: sensor.folding_home_statistics_rank
+            name: Rank
+          - type: tile
+            entity: sensor.folding_home_statistics_team_rank
+            name: Team rank
+          - type: tile
+            entity: sensor.folding_home_statistics_last_credited_work_unit
+            name: Last credited WU

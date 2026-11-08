@@ -1,0 +1,56 @@
+{
+  "entity": {
+    "sensor": {
+      "status": {
+        "default": "mdi:dna",
+        "state": {
+          "finishing": "mdi:flag-checkered",
+          "downloading": "mdi:download",
+          "uploading": "mdi:upload",
+          "waiting": "mdi:timer-sand",
+          "paused": "mdi:pause-circle-outline",
+          "idle": "mdi:sleep",
+          "offline": "mdi:monitor-off"
+        }
+      },
+      "progress": {
+        "default": "mdi:progress-clock"
+      },
+      "ppd": {
+        "default": "mdi:speedometer"
+      },
+      "eta": {
+        "default": "mdi:flag-checkered"
+      },
+      "timeout": {
+        "default": "mdi:timer-alert-outline"
+      },
+      "score": {
+        "default": "mdi:star-four-points-outline"
+      },
+      "wus": {
+        "default": "mdi:package-variant-closed-check"
+      },
+      "rank": {
+        "default": "mdi:podium"
+      },
+      "team_rank": {
+        "default": "mdi:account-group"
+      },
+      "last_wu": {
+        "default": "mdi:calendar-check"
+      }
+    },
+    "button": {
+      "fold": {
+        "default": "mdi:play"
+      },
+      "pause": {
+        "default": "mdi:pause"
+      },
+      "finish": {
+        "default": "mdi:flag-checkered"
+      }
+    }
+  }
+}
