@@ -1,0 +1,368 @@
+# Advanced example dashboard, to go with folding_package.yaml.
+#
+# Needs these frontend cards (HACS / Marketplace): button-card, Mushroom and
+# card-mod. Replace the entity IDs as described in folding_package.yaml.
+#
+# Highlights:
+# - A status card with progress bar, project, PPD and expected finish.
+# - Only the buttons that make sense right now are shown (Switch on / Fold /
+#   Pause / Finish / Continue / Switch off), using visibility conditions.
+# - Today's energy use of the PC (and optionally its cost).
+# - Fold on solar power: switch, live surplus with thresholds and a graph.
+# - Donor statistics with points earned per day.
+title: Folding@home
+views:
+  - title: Folding@home
+    path: folding
+    icon: mdi:dna
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            entity: sensor.my_pc_status
+            show_icon: false
+            show_name: false
+            show_state: false
+            triggers_update:
+              - sensor.my_pc_progress
+              - sensor.my_pc_points_per_day
+              - sensor.my_pc_expected_finish
+            tap_action:
+              action: more-info
+            hold_action:
+              action: url
+              url_path: https://v8-5.foldingathome.org/machines
+            custom_fields:
+              info: |
+                [[[
+                const s = e => states['sensor.my_pc_' + e];
+                const ok = o => o && !['unknown', 'unavailable'].includes(o.state);
+                const st = entity ? entity.state : 'offline';
+                const label = hass.formatEntityState ? hass.formatEntityState(entity) : st;
+                const active = ['folding', 'finishing', 'downloading', 'uploading'].includes(st);
+                const col = st === 'offline' ? 'var(--disabled-text-color, #888)'
+                  : active ? 'var(--info-color, #039be5)' : 'var(--secondary-text-color)';
+                let out = '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">'
+                  + '<span style="font-size:20px;font-weight:600">My PC</span>'
+                  + '<span style="font-size:14px;font-weight:600;color:' + col + '">' + label + '</span></div>';
+                if (st === 'offline') {
+                  return out + '<div style="font-size:13px;opacity:.75;margin-top:4px">Not reachable</div>';
+                }
+                const units = (entity && entity.attributes.units) || [];
+                const run = units.filter(u => u.running);
+                const main = (run.length ? run.reduce((a, b) => ((b.ppd || 0) > (a.ppd || 0) ? b : a)) : units[0]) || null;
+                const prog = s('progress');
+                const p = main && main.progress != null ? Number(main.progress) : (ok(prog) ? Number(prog.state) : null);
+                const sub = [];
+                if (main && main.project) sub.push('Project ' + main.project);
+                if (main && main.type) sub.push(main.type.toUpperCase());
+                if (st === 'waiting' && entity.attributes.pause_reason) sub.push(entity.attributes.pause_reason);
+                if (sub.length) out += '<div style="font-size:13px;opacity:.75;margin-top:2px">' + sub.join(' · ') + '</div>';
+                if (p !== null) {
+                  out += '<div style="height:10px;border-radius:5px;background:rgba(127,127,127,.25);margin-top:10px">'
+                    + '<div style="width:' + p + '%;height:100%;border-radius:5px;background:' + col + '"></div></div>';
+                  const right = [];
+                  const ppd = s('points_per_day');
+                  if (ok(ppd) && Number(ppd.state) > 0) {
+                    const n = Number(ppd.state);
+                    right.push(n >= 1e6 ? (n / 1e6).toFixed(1) + 'M PPD' : n.toLocaleString() + ' PPD');
+                  }
+                  const eta = s('expected_finish');
+                  if (ok(eta)) {
+                    const d = new Date(eta.state);
+                    const tm = d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    const days = Math.round((new Date(d.toDateString()) - new Date(new Date().toDateString())) / 864e5);
+                    right.push('done ' + (days === 0 ? tm : days === 1 ? 'tomorrow ' + tm
+                      : d.toLocaleDateString([], {weekday: 'short'}) + ' ' + tm));
+                  }
+                  out += '<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-top:6px">'
+                    + '<span style="font-weight:600">' + p.toFixed(1) + '%</span>'
+                    + '<span style="opacity:.8;text-align:right">' + right.join(' · ') + '</span></div>';
+                }
+                return out;
+                ]]]
+            styles:
+              card:
+                - padding: 12px 16px
+              grid:
+                - grid-template-areas: '"info"'
+                - grid-template-columns: 1fr
+                - grid-template-rows: auto
+              custom_fields:
+                info:
+                  - justify-self: stretch
+                  - text-align: left
+                  - width: 100%
+            grid_options:
+              columns: full
+            card_mod:
+              style: ":host { max-width: none !important; width: 100% !important; display: block; }"
+
+          - type: tile
+            entity: sensor.my_pc_power
+            name: Power now
+            icon: mdi:flash
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.my_pc_energy_today
+            name: Today
+            icon: mdi:lightning-bolt
+            grid_options:
+              columns: 6
+
+          # Buttons: only the ones that fit the current status.
+          - type: tile
+            entity: button.my_pc_wake
+            name: Switch on
+            icon: mdi:power
+            color: blue
+            hide_state: true
+            tap_action: &press_wake
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.my_pc_wake
+              confirmation:
+                text: Switch the PC on?
+            icon_tap_action: *press_wake
+            grid_options:
+              columns: 12
+            visibility:
+              - condition: state
+                entity: sensor.my_pc_status
+                state: offline
+          - type: tile
+            entity: button.my_pc_fold
+            name: Fold
+            icon: mdi:play
+            color: blue
+            hide_state: true
+            tap_action: &press_fold
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.my_pc_fold
+            icon_tap_action: *press_fold
+            grid_options:
+              columns: 12
+            visibility:
+              - condition: state
+                entity: sensor.my_pc_status
+                state: [paused, idle]
+          - type: tile
+            entity: button.my_pc_fold
+            name: Continue
+            icon: mdi:play
+            color: blue
+            hide_state: true
+            tap_action: *press_fold
+            icon_tap_action: *press_fold
+            grid_options:
+              columns: 6
+            visibility:
+              - condition: state
+                entity: sensor.my_pc_status
+                state: [finishing]
+          - type: tile
+            entity: button.my_pc_pause
+            name: Pause
+            icon: mdi:pause
+            color: grey
+            hide_state: true
+            tap_action: &press_pause
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.my_pc_pause
+            icon_tap_action: *press_pause
+            grid_options:
+              columns: 6
+            visibility:
+              - condition: state
+                entity: sensor.my_pc_status
+                state: [folding, finishing, downloading, uploading, waiting]
+          - type: tile
+            entity: button.my_pc_finish
+            name: Finish
+            icon: mdi:flag-checkered
+            color: grey
+            hide_state: true
+            tap_action: &press_finish
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.my_pc_finish
+            icon_tap_action: *press_finish
+            grid_options:
+              columns: 6
+            visibility:
+              - condition: state
+                entity: sensor.my_pc_status
+                state: [folding, downloading, uploading, waiting]
+          - type: tile
+            entity: button.my_pc_shutdown
+            name: Switch off
+            icon: mdi:power
+            color: grey
+            hide_state: true
+            tap_action: &run_shutdown
+              action: perform-action
+              perform_action: script.turn_on
+              target:
+                entity_id: script.pc_shutdown
+              confirmation:
+                text: Switch the PC off? Folding@home is paused first.
+            icon_tap_action: *run_shutdown
+            grid_options:
+              columns: 12
+            visibility:
+              - condition: state
+                entity: sensor.my_pc_status
+                state_not: offline
+
+          - type: custom:mushroom-template-card
+            entity: input_boolean.fold_on_solar
+            primary: Fold on solar power
+            secondary: >
+              {% if is_state('input_boolean.fold_on_solar', 'off') %}Off
+              {% elif is_state('input_boolean.fold_started_by_solar', 'on') %}On · folding on solar power
+              {% elif is_state('binary_sensor.solar_surplus', 'on') %}On · surplus measured
+              {% else %}On · waiting for a surplus{% endif %}
+            icon: mdi:solar-power
+            icon_color: "{{ 'amber' if is_state('input_boolean.fold_on_solar', 'on') else 'grey' }}"
+            tap_action:
+              action: perform-action
+              perform_action: input_boolean.toggle
+              target:
+                entity_id: input_boolean.fold_on_solar
+            hold_action:
+              action: more-info
+            grid_options:
+              columns: full
+          - type: custom:mushroom-template-card
+            entity: sensor.my_pc_work_unit_timeout
+            primary: Work unit timeout
+            secondary: >
+              {% set s = 'sensor.my_pc_work_unit_timeout' %}
+              {% set t = states(s) | as_datetime(none) %}
+              {% if t is none %}No work unit{% else %}
+              Before {{ (t | as_local).strftime('%a %d %b %H:%M') }} ·
+              ~{{ state_attr(s, 'remaining_hours') }} h of folding left
+              {%- if is_state('binary_sensor.folding_timeout_near', 'on') %} · will be finished, even without sun{% endif %}
+              {% endif %}
+            icon: mdi:timer-alert-outline
+            icon_color: "{{ 'amber' if is_state('binary_sensor.folding_timeout_near', 'on') else 'grey' }}"
+            tap_action:
+              action: more-info
+            grid_options:
+              columns: full
+            visibility:
+              - condition: state
+                entity: sensor.my_pc_work_unit_timeout
+                state_not: unknown
+              - condition: state
+                entity: sensor.my_pc_work_unit_timeout
+                state_not: unavailable
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Solar power
+            heading_style: subtitle
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.solar_surplus
+            primary: Surplus without PC (10 min average)
+            secondary: >
+              {{ states('sensor.solar_surplus_without_pc') | int(0) }} W ·
+              start from {{ states('input_number.fold_on_solar_start') | int(450) }} W ·
+              stop below {{ states('input_number.fold_on_solar_stop') | int(200) }} W
+            icon: mdi:solar-power-variant
+            icon_color: >
+              {% set over = states('sensor.solar_surplus_without_pc') | float(0) %}
+              {% if over >= states('input_number.fold_on_solar_start') | float(450) %}green
+              {% elif over >= states('input_number.fold_on_solar_stop') | float(200) %}amber
+              {% else %}grey{% endif %}
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+            grid_options:
+              columns: full
+          - type: tile
+            entity: input_number.fold_on_solar_start
+            name: Start threshold
+            features:
+              - type: numeric-input
+                style: buttons
+            grid_options:
+              columns: 6
+              rows: 2
+          - type: tile
+            entity: input_number.fold_on_solar_stop
+            name: Stop threshold
+            features:
+              - type: numeric-input
+                style: buttons
+            grid_options:
+              columns: 6
+              rows: 2
+          - type: history-graph
+            title: Surplus and PC today
+            hours_to_show: 12
+            entities:
+              - entity: sensor.solar_surplus_without_pc
+                name: Surplus without PC
+              - entity: sensor.my_pc_power
+                name: PC
+            grid_options:
+              columns: full
+
+      - type: grid
+        visibility:
+          - condition: state
+            entity: sensor.folding_home_statistics_total_points
+            state_not: unavailable
+        cards:
+          - type: heading
+            heading: Statistics
+            heading_style: subtitle
+          - type: tile
+            entity: sensor.folding_home_statistics_total_points
+            name: Total points
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.folding_home_statistics_work_units
+            name: Work units
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.folding_home_statistics_rank
+            name: World rank
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.folding_home_statistics_team_rank
+            name: Team
+            state_content: [state, team]
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: sensor.folding_home_statistics_last_credited_work_unit
+            name: Last work unit
+            grid_options:
+              columns: 12
+          - type: statistics-graph
+            title: Points earned per day
+            entities:
+              - entity: sensor.folding_home_statistics_total_points
+                name: Points
+            stat_types: [change]
+            period: day
+            days_to_show: 14
+            chart_type: bar
+            hide_legend: true
+            grid_options:
+              columns: full

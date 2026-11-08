@@ -1,0 +1,506 @@
+# Advanced example: fold on solar surplus, finish before the timeout, and
+# switch the PC on and off automatically.
+#
+# This is a Home Assistant package. Copy it to <config>/packages/ and enable
+# packages in configuration.yaml:
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# Then replace the entity IDs in the table below with your own. Everything that
+# is not from this integration comes from other integrations:
+#
+#   sensor.my_pc_status, button.my_pc_fold, ...  Folding@home v8 (machine "My PC")
+#   button.my_pc_wake                             Wake on LAN integration (wol)
+#   button.my_pc_shutdown                         a shutdown command on the PC,
+#                                                 e.g. HASS.Agent or IoT Link
+#   sensor.my_pc_last_active                      last keyboard/mouse input on the PC
+#                                                 (timestamp, e.g. HASS.Agent "LastActive")
+#   sensor.my_pc_power                            smart plug with power metering (W)
+#   sensor.grid_power                             net grid power (W), positive = import,
+#                                                 e.g. a P1 / smart meter integration
+#   sensor.solar_power                            current solar production (W)
+#   notify.mobile_app_my_phone                    Home Assistant companion app
+#
+# The ideas behind it:
+# - "Surplus without the PC" = PC power - net grid power. While the PC folds
+#   on solar power its own consumption is not counted against the surplus, so
+#   it does not switch itself off again.
+# - The grid power is averaged over 10 minutes, so short peaks (kettle, oven)
+#   do not stop folding at once.
+# - When the surplus is gone, the integration's Finish button lets the running
+#   work unit complete instead of throwing work away.
+# - The PC is only shut down when the automation switched it on and nobody
+#   used it in the last 10 minutes.
+
+input_boolean:
+  fold_on_solar:
+    name: Fold on solar power
+    icon: mdi:solar-power
+  fold_started_by_solar:
+    name: Folding started by solar
+  fold_finishing_by_solar:
+    name: Folding finishing by solar
+
+input_number:
+  fold_on_solar_start:
+    name: Fold on solar start threshold
+    min: 0
+    max: 2000
+    step: 50
+    unit_of_measurement: W
+    initial: 450
+  fold_on_solar_stop:
+    name: Fold on solar stop threshold
+    min: 0
+    max: 2000
+    step: 50
+    unit_of_measurement: W
+    initial: 200
+
+input_datetime:
+  pc_switched_on_by_solar:
+    name: PC switched on by solar
+    has_date: true
+    has_time: true
+
+input_text:
+  fah_timeout_handled:
+    name: Work unit handled before timeout
+
+sensor:
+  - platform: statistics
+    name: Grid power 10 min average
+    unique_id: grid_power_10_min_average
+    entity_id: sensor.grid_power
+    state_characteristic: average_linear
+    max_age:
+      minutes: 10
+
+template:
+  - sensor:
+      - name: Solar surplus without PC
+        unique_id: solar_surplus_without_pc
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: >
+          {{ (states('sensor.my_pc_power') | float(0)
+              - states('sensor.grid_power_10_min_average') | float(0)) | round(0) }}
+        availability: "{{ has_value('sensor.grid_power_10_min_average') }}"
+    binary_sensor:
+      # On from the start threshold, off below the stop threshold.
+      - name: Solar surplus
+        unique_id: solar_surplus
+        icon: mdi:solar-power-variant
+        state: >
+          {% set over = states('sensor.solar_surplus_without_pc') | float(0) %}
+          {% set start = states('input_number.fold_on_solar_start') | float(450) %}
+          {% set stop = states('input_number.fold_on_solar_stop') | float(200) %}
+          {{ over >= start or (this.state == 'on' and over >= stop) }}
+      # The work unit needs the PC (almost) continuously to make its timeout:
+      # remaining compute time plus a 6 hour margin.
+      - name: Folding timeout near
+        unique_id: folding_timeout_near
+        icon: mdi:timer-alert-outline
+        state: >
+          {% set t = states('sensor.my_pc_work_unit_timeout') | as_datetime(none) %}
+          {% set h = state_attr('sensor.my_pc_work_unit_timeout', 'remaining_hours') %}
+          {{ t is not none and h is not none
+             and (t - now()).total_seconds() / 3600 <= h | float(0) + 6 }}
+
+script:
+  pc_shutdown:
+    alias: PC shutdown
+    description: Pause Folding@home first so the core saves its work, then shut down.
+    icon: mdi:power
+    mode: single
+    sequence:
+      - if:
+          - condition: state
+            entity_id: sensor.my_pc_status
+            state: [folding, finishing, downloading, uploading, waiting]
+        then:
+          - action: button.press
+            target:
+              entity_id: button.my_pc_pause
+          - wait_template: "{{ states('sensor.my_pc_status') in ['paused', 'idle', 'offline'] }}"
+            timeout: "00:00:30"
+            continue_on_timeout: true
+          - delay:
+              seconds: 5
+      - action: button.press
+        target:
+          entity_id: button.my_pc_shutdown
+
+  pc_shutdown_after_solar:
+    alias: PC shutdown after solar folding
+    description: >
+      Shut down only if the solar automation switched the PC on and nobody
+      used it in the last 10 minutes; otherwise send a notification.
+    icon: mdi:power-sleep
+    mode: single
+    sequence:
+      - variables:
+          switched_on: "{{ state_attr('input_datetime.pc_switched_on_by_solar', 'timestamp') | float(0) }}"
+          last_active: "{{ as_timestamp(states('sensor.my_pc_last_active'), 0) }}"
+          by_solar: "{{ switched_on > as_timestamp('2001-01-01T00:00:00+00:00') }}"
+          is_on: "{{ not is_state('sensor.my_pc_status', 'offline') }}"
+          recently_used: "{{ last_active > 0 and now().timestamp() - last_active < 600 }}"
+      - choose:
+          - conditions: "{{ by_solar and is_on and not recently_used }}"
+            sequence:
+              - action: logbook.log
+                data:
+                  name: Fold on solar power
+                  message: PC shuts down; switched on by solar and not used in the last 10 minutes.
+                  entity_id: input_boolean.fold_on_solar
+              - action: script.pc_shutdown
+          - conditions: "{{ by_solar and is_on }}"
+            sequence:
+              - action: notify.mobile_app_my_phone
+                data:
+                  title: Folding on solar stopped
+                  message: >
+                    Folding stopped. The PC stays on because it was used at
+                    {{ last_active | timestamp_custom('%H:%M') }}.
+                  data:
+                    tag: fah_solar_done
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.pc_switched_on_by_solar
+        data:
+          datetime: "2000-01-01 00:00:00"
+
+automation:
+  - id: fold_on_solar_power
+    alias: Fold on solar power
+    description: >
+      Surplus for 5 min: switch the PC on (Wake on LAN) and fold. Surplus gone
+      for 30 min: finish the running work unit, then stop and shut down.
+      End of the afternoon (solar < 100 W for 15 min): pause and shut down,
+      unless the work unit is done within an hour or its timeout is near.
+      Sun back while finishing: keep folding. Safety stop at 22:00.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.solar_surplus
+        to: "on"
+        for:
+          minutes: 5
+        id: surplus
+      - trigger: state
+        entity_id: input_boolean.fold_on_solar
+        to: "on"
+        id: surplus
+      - trigger: state
+        entity_id: binary_sensor.solar_surplus
+        to: "off"
+        for:
+          minutes: 30
+        id: shortage
+      - trigger: state
+        entity_id: sensor.my_pc_status
+        to: [paused, idle]
+        not_from: [offline, unavailable, unknown]
+        id: done
+      - trigger: numeric_state
+        entity_id: sensor.solar_power
+        below: 100
+        for:
+          minutes: 15
+        id: evening
+      - trigger: time
+        at: "22:00:00"
+        id: night
+      - trigger: state
+        entity_id: sensor.my_pc_status
+        to: offline
+        for:
+          minutes: 5
+        id: "off"
+    conditions:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: input_boolean.fold_on_solar
+            state: "on"
+          - condition: trigger
+            id: [done, evening, night, "off"]
+    actions:
+      - variables:
+          eta: "{{ as_timestamp(states('sensor.my_pc_expected_finish'), 0) }}"
+          running_unit: >
+            {{ (states.sensor.my_pc_status.attributes.get('units') or [])
+               | selectattr('state', 'eq', 'RUN') | list | count > 0 }}
+      - choose:
+          # Enough sun: switch on if needed, then fold (or keep folding).
+          - conditions:
+              - condition: trigger
+                id: surplus
+              - condition: state
+                entity_id: binary_sensor.solar_surplus
+                state: "on"
+            sequence:
+              - if:
+                  - condition: state
+                    entity_id: sensor.my_pc_status
+                    state: offline
+                then:
+                  - action: button.press
+                    target:
+                      entity_id: button.my_pc_wake
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.pc_switched_on_by_solar
+                    data:
+                      timestamp: "{{ now().timestamp() }}"
+                  - wait_template: "{{ not is_state('sensor.my_pc_status', 'offline') }}"
+                    timeout: "00:15:00"
+                    continue_on_timeout: false
+                  - delay:
+                      seconds: 5
+              - if:
+                  - condition: or
+                    conditions:
+                      - condition: state
+                        entity_id: sensor.my_pc_status
+                        state: [paused, idle]
+                      - condition: and
+                        conditions:
+                          - condition: state
+                            entity_id: sensor.my_pc_status
+                            state: finishing
+                          - condition: state
+                            entity_id: input_boolean.fold_finishing_by_solar
+                            state: "on"
+                then:
+                  - action: button.press
+                    target:
+                      entity_id: button.my_pc_fold
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.fold_started_by_solar
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.fold_finishing_by_solar
+
+          # Surplus gone: finish the running work unit instead of pausing.
+          - conditions:
+              - condition: trigger
+                id: shortage
+              - condition: state
+                entity_id: input_boolean.fold_started_by_solar
+                state: "on"
+              - condition: state
+                entity_id: sensor.my_pc_status
+                state: [folding, downloading, uploading, waiting, finishing]
+            sequence:
+              - if:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: sensor.my_pc_status
+                        state: finishing
+                then:
+                  - action: button.press
+                    target:
+                      entity_id: button.my_pc_finish
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.fold_finishing_by_solar
+              - action: logbook.log
+                data:
+                  name: Fold on solar power
+                  message: >
+                    Surplus gone: finishing the current work unit
+                    (expected {{ eta | timestamp_custom('%H:%M') if eta > 0 else 'unknown' }}).
+                  entity_id: input_boolean.fold_on_solar
+
+          # Surplus gone and nothing running (e.g. no work available).
+          - conditions:
+              - condition: trigger
+                id: shortage
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id:
+                    - input_boolean.fold_started_by_solar
+                    - input_boolean.fold_finishing_by_solar
+              - action: script.pc_shutdown_after_solar
+
+          # Finished (not a manual pause halfway): stop and maybe shut down.
+          - conditions:
+              - condition: trigger
+                id: done
+              - condition: state
+                entity_id: input_boolean.fold_finishing_by_solar
+                state: "on"
+              - condition: template
+                value_template: "{{ not running_unit }}"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id:
+                    - input_boolean.fold_started_by_solar
+                    - input_boolean.fold_finishing_by_solar
+              - action: script.pc_shutdown_after_solar
+
+          # End of the afternoon or 22:00 while finishing: pause, unless the
+          # work unit is nearly done or must be returned soon.
+          - conditions:
+              - condition: trigger
+                id: [evening, night]
+              - condition: state
+                entity_id: input_boolean.fold_finishing_by_solar
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.folding_timeout_near
+                state: "off"
+              - condition: template
+                value_template: >
+                  {{ trigger.id == 'night' or not (0 < eta <= now().timestamp() + 3600) }}
+            sequence:
+              - if:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: sensor.my_pc_status
+                        state: [offline, paused, idle]
+                then:
+                  - action: button.press
+                    target:
+                      entity_id: button.my_pc_pause
+              - action: input_boolean.turn_off
+                target:
+                  entity_id:
+                    - input_boolean.fold_started_by_solar
+                    - input_boolean.fold_finishing_by_solar
+              - action: script.pc_shutdown_after_solar
+
+          # PC switched off by hand: reset the helpers.
+          - conditions:
+              - condition: trigger
+                id: "off"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id:
+                    - input_boolean.fold_started_by_solar
+                    - input_boolean.fold_finishing_by_solar
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.pc_switched_on_by_solar
+                data:
+                  datetime: "2000-01-01 00:00:00"
+
+  - id: fold_before_timeout
+    alias: Fold before the work unit timeout
+    description: >
+      If the work unit would not make its timeout on solar power alone, finish
+      it anyway: switch the PC on if needed, Fold and Finish right away. Once
+      per work unit, and not while somebody used the PC in the last 10 minutes.
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.folding_timeout_near
+        to: "on"
+      - trigger: time_pattern
+        minutes: /10
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.folding_timeout_near
+        state: "on"
+      - condition: template
+        value_template: >
+          {% set wu = state_attr('sensor.my_pc_work_unit_timeout', 'prcg') %}
+          {{ wu not in (none, '') and wu != states('input_text.fah_timeout_handled') }}
+      - condition: template
+        value_template: >
+          {% set active = as_timestamp(states('sensor.my_pc_last_active'), 0) %}
+          {{ is_state('sensor.my_pc_status', 'offline')
+             or not (active > 0 and now().timestamp() - active < 600) }}
+    actions:
+      - variables:
+          was_off: "{{ is_state('sensor.my_pc_status', 'offline') }}"
+          wu: "{{ state_attr('sensor.my_pc_work_unit_timeout', 'prcg') }}"
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.fah_timeout_handled
+        data:
+          value: "{{ wu }}"
+      # Let the solar automation leave this work unit alone.
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.fold_started_by_solar
+            - input_boolean.fold_finishing_by_solar
+      - action: notify.mobile_app_my_phone
+        data:
+          title: Folding before the timeout
+          message: >
+            Work unit {{ wu }} must be returned before
+            {{ as_timestamp(states('sensor.my_pc_work_unit_timeout')) | timestamp_custom('%a %H:%M') }}.
+            The PC finishes it now and switches off afterwards.
+          data:
+            tag: fah_timeout
+      - if: "{{ was_off }}"
+        then:
+          - action: button.press
+            target:
+              entity_id: button.my_pc_wake
+          - wait_template: "{{ not is_state('sensor.my_pc_status', 'offline') }}"
+            timeout: "00:15:00"
+            continue_on_timeout: false
+          - delay:
+              seconds: 5
+      - action: button.press
+        target:
+          entity_id: button.my_pc_fold
+      - wait_template: "{{ is_state('sensor.my_pc_status', ['folding', 'downloading', 'waiting']) }}"
+        timeout: "00:02:00"
+        continue_on_timeout: true
+      - action: button.press
+        target:
+          entity_id: button.my_pc_finish
+
+  - id: pc_off_after_finish
+    alias: PC off after finishing
+    description: >
+      After Finish (by hand or by "Fold before the timeout"): once the work unit
+      is done and uploaded, shut the PC down. Not after the Pause button, not
+      when the solar automation is handling it, and not when the PC was used in
+      the last 10 minutes.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.my_pc_status
+        from: [finishing, uploading]
+        to: [paused, idle]
+    conditions:
+      - condition: state
+        entity_id: input_boolean.fold_finishing_by_solar
+        state: "off"
+      # The Pause button was not pressed in the last 2 minutes.
+      - condition: template
+        value_template: "{{ now().timestamp() - as_timestamp(states('button.my_pc_pause'), 0) > 120 }}"
+      # No work unit left half-done (a pause from Web Control is not "finished").
+      - condition: template
+        value_template: >
+          {{ not ((trigger.to_state.attributes.get('units') or [])
+                  | selectattr('state', 'eq', 'RUN') | list | count > 0) }}
+    actions:
+      - variables:
+          last_active: "{{ as_timestamp(states('sensor.my_pc_last_active'), 0) }}"
+      - if: "{{ last_active > 0 and now().timestamp() - last_active < 600 }}"
+        then:
+          - action: notify.mobile_app_my_phone
+            data:
+              title: Folding@home done
+              message: The work unit is done and uploaded. The PC stays on because it was just used.
+              data:
+                tag: fah_finished
+        else:
+          - action: script.pc_shutdown

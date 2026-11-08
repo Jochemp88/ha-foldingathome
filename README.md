@@ -1,10 +1,8 @@
 # Folding@home v8 for Home Assistant
 
 [![Validate](https://img.shields.io/github/actions/workflow/status/Jochemp88/ha-foldingathome/validate.yml?branch=main&label=Validate&logo=github)](https://github.com/Jochemp88/ha-foldingathome/actions/workflows/validate.yml)
-[![Tests](https://img.shields.io/github/actions/workflow/status/Jochemp88/ha-foldingathome/tests.yml?branch=main&label=Tests&logo=github)](https://github.com/Jochemp88/ha-foldingathome/actions/workflows/tests.yml)
 [![release](https://img.shields.io/github/v/release/Jochemp88/ha-foldingathome?color=orange)](https://github.com/Jochemp88/ha-foldingathome/releases/latest)
 [![License](https://img.shields.io/github/license/Jochemp88/ha-foldingathome?color=blue)](LICENSE)
-[![Marketplace / HACS](https://img.shields.io/badge/Marketplace%20%2F%20HACS-custom-41BDF5)](#installation)
 
 A custom integration that connects Home Assistant to a local
 [Folding@home](https://foldingathome.org/) **v8** client. It keeps a websocket
@@ -157,6 +155,16 @@ the three buttons, a table of the running work units and the donor statistics.
 Create a new dashboard, open ⋮ → **Edit dashboard** → ⋮ → **Raw configuration
 editor**, paste the file and replace `folding_pc` with the entity ID prefix of
 your machine.
+
+### Advanced examples (optional)
+
+[`examples/advanced/`](examples/advanced/) shows what you can build on top of
+the integration, taken from a real setup: fold only on solar surplus (switch
+the PC on with Wake on LAN, *Finish* instead of pause when the sun is gone,
+shut down afterwards), finish a work unit before its timeout even without sun,
+switch the PC off after *Finish*, and never shut down a PC that is in use. It
+comes as a ready-made package plus a dashboard, and needs a few other
+integrations (Wake on LAN, an agent on the PC, a smart plug and a P1 meter).
 
 ## Example automations
 
