@@ -100,6 +100,38 @@ async def fetch_user_stats(
     return stats
 
 
+async def fetch_team_members(
+    session: aiohttp.ClientSession, team: int
+) -> list[dict[str, Any]]:
+    """Return the top members of a team (the API lists at most 1000).
+
+    The API answers with a table: a header row, then one row per member.
+    """
+    url = f"{STATS_URL}/team/{int(team)}/members"
+    try:
+        async with asyncio.timeout(STATS_TIMEOUT):
+            resp = await session.get(url)
+            resp.raise_for_status()
+            rows = await resp.json(content_type=None)
+    except (TimeoutError, aiohttp.ClientError, ValueError) as err:
+        raise FahError(
+            f"Cannot read members of team {team}: {str(err) or type(err).__name__}"
+        ) from err
+    if not isinstance(rows, list) or not rows or not isinstance(rows[0], list):
+        raise FahError(f"Unexpected member list for team {team}")
+    header = rows[0]
+    return [dict(zip(header, row)) for row in rows[1:] if isinstance(row, list)]
+
+
+def member_rank(members: list[dict[str, Any]], donor_id: Any) -> int | None:
+    """Return the donor's place in the team by score, or None if not listed."""
+    ranked = sorted(members, key=lambda m: m.get("score") or 0, reverse=True)
+    for place, member in enumerate(ranked, start=1):
+        if member.get("id") == donor_id:
+            return place
+    return None
+
+
 class FahClient:
     """Connection to one Folding@home v8 client."""
 

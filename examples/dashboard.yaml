@@ -129,5 +129,8 @@ views:
             entity: sensor.folding_home_statistics_team_rank
             name: Team rank
           - type: tile
+            entity: sensor.folding_home_statistics_rank_in_team
+            name: Rank in team
+          - type: tile
             entity: sensor.folding_home_statistics_last_credited_work_unit
             name: Last credited WU

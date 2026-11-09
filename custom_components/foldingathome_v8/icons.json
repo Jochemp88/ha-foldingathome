@@ -37,6 +37,9 @@
       "team_rank": {
         "default": "mdi:account-group"
       },
+      "team_member_rank": {
+        "default": "mdi:account-star"
+      },
       "last_wu": {
         "default": "mdi:calendar-check"
       }

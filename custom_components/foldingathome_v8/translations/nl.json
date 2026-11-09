@@ -72,6 +72,9 @@
       "team_rank": {
         "name": "Teamranglijst"
       },
+      "team_member_rank": {
+        "name": "Rang in team"
+      },
       "last_wu": {
         "name": "Laatste werkeenheid"
       }

@@ -343,6 +343,13 @@ STATS_SENSORS: tuple[FahStatsSensorDescription, ...] = (
         attrs_fn=_team_attrs,
     ),
     FahStatsSensorDescription(
+        key="team_member_rank",
+        translation_key="team_member_rank",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda s: s.data.get("team_member_rank"),
+        attrs_fn=lambda s: {"team": (s.team or {}).get("name")},
+    ),
+    FahStatsSensorDescription(
         key="last_wu",
         translation_key="last_wu",
         device_class=SensorDeviceClass.TIMESTAMP,

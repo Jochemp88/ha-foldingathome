@@ -12,7 +12,12 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from custom_components.foldingathome_v8.api import FahError, fetch_user_stats
+from custom_components.foldingathome_v8.api import (
+    FahError,
+    fetch_team_members,
+    fetch_user_stats,
+    member_rank,
+)
 from custom_components.foldingathome_v8.const import CONF_TEAM, CONF_USER, DOMAIN
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
@@ -34,6 +39,14 @@ STATS = {
         {"team": 4242, "name": "Example team", "trank": 64, "tscore": 99, "twus": 7},
     ],
 }
+
+MEMBERS = [
+    ["name", "id", "rank", "score", "wus"],
+    ["Top", 7, 100, 900000000, 900],
+    ["Donor", 1, 12345, 123456789, 321],
+    ["Second", 8, 200, 500000000, 500],
+]
+MEMBER_ROWS = [dict(zip(MEMBERS[0], row)) for row in MEMBERS[1:]]
 
 
 def _closed_port() -> int:
@@ -66,6 +79,22 @@ async def test_fetch_user_stats(
         await fetch_user_stats(session, "Slow")
 
 
+async def test_fetch_team_members_and_rank(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get("https://api.foldingathome.org/team/4242/members", json=MEMBERS)
+    aioclient_mock.get("https://api.foldingathome.org/team/5/members", json={"error": "x"})
+    session = async_get_clientsession(hass)
+    members = await fetch_team_members(session, 4242)
+    assert members[1] == {"name": "Donor", "id": 1, "rank": 12345, "score": 123456789, "wus": 321}
+    # Ranked by score within the team, whatever order the API uses.
+    assert member_rank(members, 1) == 3
+    assert member_rank(members, 7) == 1
+    assert member_rank(members, 99) is None
+    with pytest.raises(FahError):
+        await fetch_team_members(session, 5)
+
+
 async def test_stats_sensors_while_machine_is_off(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -80,7 +109,11 @@ async def test_stats_sensors_while_machine_is_off(hass: HomeAssistant) -> None:
     )
     entry.add_to_hass(hass)
     fetch = AsyncMock(return_value=STATS)
-    with patch("custom_components.foldingathome_v8.coordinator.fetch_user_stats", fetch):
+    members = AsyncMock(return_value=MEMBER_ROWS)
+    with (
+        patch("custom_components.foldingathome_v8.coordinator.fetch_user_stats", fetch),
+        patch("custom_components.foldingathome_v8.coordinator.fetch_team_members", members),
+    ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         prefix = "sensor.folding_home_statistics_"
         await _wait_for(lambda: hass.states.get(prefix + "total_points").state != "unavailable")
@@ -94,6 +127,10 @@ async def test_stats_sensors_while_machine_is_off(hass: HomeAssistant) -> None:
         team = hass.states.get(prefix + "team_rank")
         assert team.state == "64"
         assert team.attributes["team"] == "Example team"
+        assert members.await_args.args[1] == 4242
+        member = hass.states.get(prefix + "rank_in_team")
+        assert member.state == "3"
+        assert member.attributes["team"] == "Example team"
         assert (
             hass.states.get(prefix + "last_credited_work_unit").state
             == "2026-01-02T03:04:05+00:00"
@@ -120,7 +157,11 @@ async def test_stats_survive_a_short_api_outage(hass: HomeAssistant) -> None:
     entry.add_to_hass(hass)
     slow = FahError("Cannot read statistics for Donor: TimeoutError")
     fetch = AsyncMock(side_effect=[STATS, slow, slow, slow, STATS, slow])
-    with patch("custom_components.foldingathome_v8.coordinator.fetch_user_stats", fetch):
+    members = AsyncMock(side_effect=FahError("Cannot read members of team 4242"))
+    with (
+        patch("custom_components.foldingathome_v8.coordinator.fetch_user_stats", fetch),
+        patch("custom_components.foldingathome_v8.coordinator.fetch_team_members", members),
+    ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         points = "sensor.folding_home_statistics_total_points"
         await _wait_for(lambda: hass.states.get(points).state != "unavailable")

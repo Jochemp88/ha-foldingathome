@@ -142,7 +142,8 @@ A separate *Folding@home statistics* device (available once the donor name has b
 | Total points | sensor | Donor score. |
 | Work units | sensor | Number of credited work units. |
 | Rank | sensor | Donor rank. Attribute: `donors`. |
-| Team rank | sensor | Donor rank within the team. Attributes: `team`, `team_id`, `team_score`, `team_wus`. |
+| Team rank | sensor | Rank of the donor's team among all teams. Attributes: `team`, `team_id`, `team_score`, `team_wus` (team totals). |
+| Rank in team | sensor | The donor's place within the team by points. Taken from the team's top 1000 members, so unknown for donors further down. Attribute: `team`. |
 | Last credited work unit | sensor (timestamp) | When the last work unit was credited. |
 
 Statistics are refreshed every 30 minutes.

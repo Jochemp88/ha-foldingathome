@@ -72,6 +72,9 @@
       "team_rank": {
         "name": "Team rank"
       },
+      "team_member_rank": {
+        "name": "Rank in team"
+      },
       "last_wu": {
         "name": "Last credited work unit"
       }

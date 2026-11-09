@@ -14,7 +14,14 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import FahClient, FahConnectionError, FahError, fetch_user_stats
+from .api import (
+    FahClient,
+    FahConnectionError,
+    FahError,
+    fetch_team_members,
+    fetch_user_stats,
+    member_rank,
+)
 from .const import (
     CONF_TEAM,
     CONF_USER,
@@ -224,4 +231,18 @@ class FahStatsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return self.data
             raise UpdateFailed(str(err)) from err
         self._failures = 0
-        return stats
+        return {**stats, "team_member_rank": await self._team_member_rank(stats)}
+
+    async def _team_member_rank(self, stats: dict[str, Any]) -> int | None:
+        """Return the donor's place within the team (team 0 means no team)."""
+        team = self.config_entry.data.get(CONF_TEAM)
+        if not team or stats.get("id") is None:
+            return None
+        try:
+            members = await fetch_team_members(
+                async_get_clientsession(self.hass), team
+            )
+        except FahError as err:
+            _LOGGER.debug("%s; keeping the last team rank", err)
+            return (self.data or {}).get("team_member_rank")
+        return member_rank(members, stats["id"])
