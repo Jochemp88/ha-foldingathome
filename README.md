@@ -127,7 +127,7 @@ Per machine (entity IDs start with `<machine>_`, depending on your machine name)
 | Entity | Type | Description |
 | --- | --- | --- |
 | Status | sensor (enum) | `folding`, `finishing`, `downloading`, `uploading`, `waiting`, `paused`, `idle`, `offline`. Attributes: `units`, `pause_reason`. |
-| Progress | sensor (%) | Progress of the main work unit. |
+| Progress | sensor (%) | Progress of the main work unit. Attributes: `project`, `type`, `gpu` (GPU name as the client reports it). |
 | Points per day | sensor (PPD) | Estimated PPD of all running work units. Attribute: `running_units`. |
 | Expected finish | sensor (timestamp) | Expected finish of the running work. |
 | Work unit timeout | sensor (timestamp) | Timeout of the work unit that is due first. Attributes: `deadline`, `remaining_hours`, `prcg`. |

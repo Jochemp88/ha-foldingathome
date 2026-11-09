@@ -221,5 +221,17 @@ def unit_summary(data: dict[str, Any], unit: dict[str, Any]) -> dict[str, Any]:
         "eta": unit.get("eta"),
         "cpus": unit.get("cpus"),
         "gpus": len(unit.get("gpus") or []),
+        "gpu": unit_gpu_names(data, unit),
         "credit": assignment.get("credit"),
     }
+
+
+def unit_gpu_names(data: dict[str, Any], unit: dict[str, Any]) -> str | None:
+    """Return the names of the unit's GPUs as the client reports them."""
+    known = (data.get("info") or {}).get("gpus") or {}
+    names = [
+        name
+        for gpu_id in unit.get("gpus") or []
+        if (name := (known.get(gpu_id) or {}).get("description"))
+    ]
+    return ", ".join(names) or None

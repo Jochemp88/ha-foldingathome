@@ -27,6 +27,7 @@ SNAPSHOT: dict[str, Any] = {
         "version": "8.5.5",
         "mach_name": "Desktop",
         "cpu_brand": "Test CPU",
+        "gpus": {"gpu:01:00:00": {"type": "nvidia", "description": "Test GPU 1000"}},
         "id": "machine-1",
     },
     "config": {"user": "someone", "team": 0},
@@ -194,6 +195,9 @@ async def test_entities_buttons_and_offline(hass: HomeAssistant, fake_client) ->
         units = hass.states.get("sensor.desktop_status").attributes["units"]
         assert [u["type"] for u in units] == ["gpu", "cpu"]
         assert units[0]["prcg"] == "18201 (1, 2, 3)"
+        assert units[0]["gpu"] == "Test GPU 1000"
+        assert units[1]["gpu"] is None
+        assert hass.states.get("sensor.desktop_progress").attributes["gpu"] == "Test GPU 1000"
 
         timeout = hass.states.get("sensor.desktop_work_unit_timeout")
         assert timeout.state == "2026-11-09T07:51:00+00:00"

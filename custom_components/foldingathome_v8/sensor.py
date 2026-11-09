@@ -156,7 +156,11 @@ class FahProgressSensor(FahEntity, SensorEntity):
         if unit is None:
             return None
         summary = unit_summary(self.coordinator.data, unit)
-        return {"project": summary["project"], "type": summary["type"]}
+        return {
+            "project": summary["project"],
+            "type": summary["type"],
+            "gpu": summary["gpu"],
+        }
 
 
 class FahPpdSensor(FahEntity, SensorEntity):
